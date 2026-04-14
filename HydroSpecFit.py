@@ -1532,7 +1532,7 @@ class DynamicParamsWindow(ctk.CTkToplevel):
         self.entry_global_visc.insert(0, current_main_visc)
         self.entry_global_visc.pack(side="right", padx=5, pady=10)
         
-        ctk.CTkLabel(top_controls, text="Set All Viscosities:", font=("Arial", 13, "bold")).pack(side="right", padx=(20, 5), pady=10)
+        ctk.CTkLabel(top_controls, text="Set All Viscosity:", font=("Arial", 13, "bold")).pack(side="right", padx=(20, 5), pady=10)
 
         self.table_container = ctk.CTkFrame(self, fg_color="transparent")
         self.table_container.pack(fill="both", expand=True, padx=20, pady=5)
@@ -1579,10 +1579,32 @@ class DynamicParamsWindow(ctk.CTkToplevel):
 
         self.populate_cycles()
 
-        self.btn_run_multi = ctk.CTkButton(self, text="Run Dynamic Optimization (All Cycles)", 
-                                           command=self.trigger_run, 
-                                           fg_color="green", height=45, corner_radius=8, font=("Arial", 14, "bold"))
-        self.btn_run_multi.pack(pady=20, padx=80, fill="x", side="bottom")
+        self.bottom_actions = ctk.CTkFrame(self, fg_color="transparent")
+        self.bottom_actions.pack(pady=20, padx=80, fill="x", side="bottom")
+
+        self.btn_run_multi = ctk.CTkButton(
+            self.bottom_actions,
+            text="Run Dynamic Optimization (All Cycles)",
+            command=self.trigger_run,
+            fg_color="green",
+            height=45,
+            corner_radius=8,
+            font=("Arial", 14, "bold")
+        )
+        self.btn_run_multi.pack(side="left", fill="x", expand=True)
+
+        self.btn_stop_multi = ctk.CTkButton(
+            self.bottom_actions,
+            text="Stop",
+            command=self.request_stop,
+            fg_color="#c0392b",
+            hover_color="#a93226",
+            width=130,
+            height=45,
+            corner_radius=8,
+            font=("Arial", 14, "bold")
+        )
+        self.btn_stop_multi.pack(side="left", padx=(12, 0))
         
         self.lift()
         self.attributes('-topmost', True)
@@ -1613,6 +1635,13 @@ class DynamicParamsWindow(ctk.CTkToplevel):
         }
         cfg = state_map.get(state, state_map["uncalibrated"])
         button.configure(text=cfg["text"], fg_color=cfg["fg"], hover_color=cfg["hover"], width=260)
+
+    def request_stop(self):
+        if not self.parent_app.is_running:
+            self.parent_app.log(">>> No active fitting process to stop.")
+            return
+        self.parent_app.log(">>> Stop requested by user...")
+        self.parent_app.stop_flag = True
 
     def update_cycle_viscosity_memory(self, group_id, value):
         try:
@@ -2414,8 +2443,6 @@ class PhysicsOptimizerApp(ctk.CTk):
         self.step1_frame.columnconfigure(0, weight=1, uniform="cols")
         self.step1_frame.columnconfigure(1, weight=1, uniform="cols")
         self.step1_frame.columnconfigure(2, weight=1, uniform="cols")
-        self.step1_frame.columnconfigure(3, weight=1, uniform="cols")
-        self.step1_frame.columnconfigure(4, weight=1, uniform="cols")
         
         load_btn_color = "#7C3AED" 
         load_btn_hover = "#6D28D9" 
@@ -2440,20 +2467,8 @@ class PhysicsOptimizerApp(ctk.CTk):
         self.btn_load_air.grid(row=0, column=2, padx=10, pady=(10, 5))
         self.lbl_file_air = ctk.CTkLabel(self.step1_frame, text="No file selected", text_color="gray", width=200)
         self.lbl_file_air.grid(row=1, column=2, padx=10, pady=(0, 10))
-
-        self.btn_load_material = ctk.CTkButton(self.step1_frame, text="4. Load Quartz with Material (Excel)", 
-                                            command=self.load_material_file, 
-                                            fg_color=load_btn_color, hover_color=load_btn_hover)
-        self.btn_load_material.grid(row=0, column=3, padx=10, pady=(10, 5))
-        self.lbl_file_material = ctk.CTkLabel(self.step1_frame, text="No file selected", text_color="gray", width=200)
-        self.lbl_file_material.grid(row=1, column=3, padx=10, pady=(0, 10))
-
-        self.btn_load_coated_material = ctk.CTkButton(self.step1_frame, text="5. Load Coated Quartz with Material (Excel)", 
-                                            command=self.load_coated_material_file, 
-                                            fg_color=load_btn_color, hover_color=load_btn_hover)
-        self.btn_load_coated_material.grid(row=0, column=4, padx=10, pady=(10, 5))
-        self.lbl_file_coated_material = ctk.CTkLabel(self.step1_frame, text="No file selected", text_color="gray", width=200)
-        self.lbl_file_coated_material.grid(row=1, column=4, padx=10, pady=(0, 10))
+        self.lbl_file_material = None
+        self.lbl_file_coated_material = None
 
         self.scroll_frame = ctk.CTkScrollableFrame(self, height=450)
         self.scroll_frame.pack(pady=10, padx=20, fill="both", expand=True)
@@ -2499,22 +2514,17 @@ class PhysicsOptimizerApp(ctk.CTk):
         ctk.CTkLabel(self.guide_window, text="Quick Start Guide", font=("Arial", 16, "bold"), text_color="#00BFFF").pack(pady=(15, 10))
         
         instructions_text = (
-            "1. Load QCM-D, EChem, and reference files.\n\n"
-            "2. Check the physical and electrochemical parameters.\n\n"
-            "3. Use Time Sync if the datasets must be aligned.\n\n"
-            "4. Open Auto-Cycles Optimization to detect cycles and define per-cycle settings.\n\n"
-            "5. Set viscosity manually, use Apply to All, or calibrate each segment.\n\n"
-            "6. Manual segmentation is mainly for non-Newtonian liquids, where viscosity can change during one cycle.\n\n"
-            "7. In the graph window, double-click to add a red cut line.\n"
-            "   Double-click the same line again to remove it.\n"
-            "   Use Clear All Lines to reset, then Confirm Segments to apply.\n\n"
-            "8. After segmentation, each segment gets its own Theta and viscosity controls, but optimization still runs per full cycle.\n\n"
-            "9. Calibration states:\n"
-            "   Calibrate = not calibrated yet.\n"
-            "   Manual Calibrated = viscosity changed manually.\n"
-            "   Auto Calibrated = viscosity selected automatically.\n\n"
-            "10. Click Run Dynamic Optimization to process all cycles.\n\n"
-            "11. Use Reset Manual Splits to return to the default cycle view."
+            "1. Load the QCM-D, EChem, and Quartz in Air data.\n\n"
+            "2. Verify the QCM physical and electrochemical parameters.\n\n"
+            "3. Use Time Sync to align the datasets.\n\n"
+            "4. Open Auto-Cycles Optimization to detect cycles and define cycle-specific settings.\n\n"
+            "5. Set All Viscosity manually and click Apply to All, or use Auto Calibrate Viscosity.\n\n"
+            "6. Adjust Theta if the quartz crystal coverage changes.\n\n"
+            "7. Use Viscosity Calibration to calibrate the starting viscosity of each cycle. Select a baseline point and confirm the viscosity using Kanazawa line fitting.\n\n"
+            "8. Click Optimize Cycle \"x\" to check the fitting results. Double-click any point to view fitting details. Repeat for all cycles, then click Run Dynamic Optimization (All Cycles) for global fitting.\n\n"
+            "9. If viscosity changes within a cycle, use Manual Segmentation. Each segment will have independent Theta and viscosity settings.\n\n"
+            "10. Export results using Combined Analysis (Image) or Combined Analysis (Excel).\n\n"
+            "11. Click Reset Manual Splits to return to the default cycle view"
         )
         lbl = ctk.CTkLabel(self.guide_window, text=instructions_text, font=("Arial", 13), justify="left", wraplength=650)
         lbl.pack(pady=(0, 10), padx=25, anchor="w")
@@ -2564,27 +2574,27 @@ class PhysicsOptimizerApp(ctk.CTk):
         self.card_elec = ctk.CTkFrame(self.params_grid, fg_color="#262626", corner_radius=10)
         self.card_elec.pack(side="left", fill="both", expand=True, padx=(5, 0))
 
-        ctk.CTkLabel(self.card_qcm, text="QCM Physical", font=("Arial", 15, "bold"), text_color="#3498db").pack(pady=(15, 0))
+        ctk.CTkLabel(self.card_qcm, text="QCM Physical Parameters", font=("Arial", 15, "bold"), text_color="#3498db").pack(pady=(15, 0))
         ctk.CTkLabel(self.card_qcm, text="Sensor physical constants", font=("Arial", 11), text_color="gray").pack(pady=(0, 10))
         self._add_param_row(self.card_qcm, "Quartz Density [g/cm^3]", "2.648")
         self._add_param_row(self.card_qcm, "Quartz Viscosity [Pa]", "2.947e10")
+        self._add_param_row(self.card_qcm, "Active Area [cm^2]", "0.785")
         self._add_param_row(self.card_qcm, "Sensitivity [Hz·cm^2/ug]", "56.5")
 
         ctk.CTkLabel(self.card_echem, text="Electrochemical", font=("Arial", 15, "bold"), text_color="#2ecc71").pack(pady=(15, 0))
         ctk.CTkLabel(self.card_echem, text="Reaction & electrode details", font=("Arial", 11), text_color="gray").pack(pady=(0, 10))
         self._add_param_row(self.card_echem, "Molecular Weight [g/mol]", "65")
         self._add_param_row(self.card_echem, "Number of Electrons", "2")
-        self._add_param_row(self.card_echem, "Active Area [cm^2]", "0.785")
+        self._add_param_row(self.card_echem, "Coverage (θ) [range: 0–1]", "1.0")
 
         ctk.CTkLabel(self.card_elec, text="Electrolyte", font=("Arial", 15, "bold"), text_color="#9b59b6").pack(pady=(15, 0))
         ctk.CTkLabel(self.card_elec, text="Fluid properties & correction", font=("Arial", 11), text_color="gray").pack(pady=(0, 10))
         self._add_param_row(self.card_elec, "Liquid Density [g/cm^3]", "1.3228")
         self._add_param_row(self.card_elec, "Ref. Liquid Viscosity [Pa·s]", "0.0032")
-        self._add_param_row(self.card_elec, "Coverage (θ) [range: 0–1]", "1.0")
 
         ctk.CTkLabel(self.right_col, text="Harmonics Configuration", font=("Arial", 16, "bold")).pack(anchor="center", padx=15, pady=(15, 10))
         
-        ctk.CTkLabel(self.right_col, text="Quartz crystal signal measured in reference (Hz/ppm):", font=("Arial", 12, "bold"), text_color="#f1c40f").pack(anchor="center", padx=15, pady=(5, 10))
+        ctk.CTkLabel(self.right_col, text="Quartz crystal signal measured in air (Hz/ppm):", font=("Arial", 12, "bold"), text_color="#f1c40f").pack(anchor="center", padx=15, pady=(5, 10))
 
         headers_frame = ctk.CTkFrame(self.right_col, fg_color="transparent")
         headers_frame.pack(fill="x", padx=15)
@@ -2597,7 +2607,7 @@ class PhysicsOptimizerApp(ctk.CTk):
 
     def _add_param_row(self, parent, text, val):
         row_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        row_frame.pack(fill="x", pady=12, padx=15) 
+        row_frame.pack(fill="x", pady=12, padx=15)
         lbl = ctk.CTkLabel(row_frame, text=text + ":", font=("Arial", 12))
         lbl.pack(side="left")
         entry = ctk.CTkEntry(row_frame, width=95, justify="center")
@@ -2703,7 +2713,8 @@ class PhysicsOptimizerApp(ctk.CTk):
                 self.raw_material_data = self.parse_reference_file(file_path)
                 
                 base_name = os.path.basename(file_path)
-                self.lbl_file_material.configure(text=self.truncate_string(base_name), text_color="white")
+                if self.lbl_file_material is not None:
+                    self.lbl_file_material.configure(text=self.truncate_string(base_name), text_color="white")
                 self.log(f"Quartz with Material Data File loaded: {base_name}. Extracted last valid stabilization points.")
                 self.invalidate_full_run()
             except Exception as e:
@@ -2716,7 +2727,8 @@ class PhysicsOptimizerApp(ctk.CTk):
                 self.raw_coated_material_data = self.parse_reference_file(file_path)
                 
                 base_name = os.path.basename(file_path)
-                self.lbl_file_coated_material.configure(text=self.truncate_string(base_name), text_color="white")
+                if self.lbl_file_coated_material is not None:
+                    self.lbl_file_coated_material.configure(text=self.truncate_string(base_name), text_color="white")
                 self.log(f"Coated Quartz with Material Data File loaded: {base_name}. Extracted last valid stabilization points.")
                 self.invalidate_full_run()
             except Exception as e:
