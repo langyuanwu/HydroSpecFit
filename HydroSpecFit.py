@@ -2825,7 +2825,13 @@ class PhysicsOptimizerApp(ctk.CTk):
         for i in range(0, len(self.cycle_indices) - 2, 2):
             idx_start = int(self.cycle_indices[i])
             idx_end = int(self.cycle_indices[i + 2])
-            if idx_start <= target_idx <= idx_end:
+            
+            # Identify if this is the very last cycle in the list
+            is_last_cycle = (i == len(self.cycle_indices) - 3)
+            
+            # Use strict less-than (<) for the end boundary to prevent overlap, 
+            # unless it's the very last cycle where we must include the final point.
+            if idx_start <= target_idx < idx_end or (is_last_cycle and target_idx == idx_end):
                 return idx_start, idx_end, (i // 2) + 1
         return None
 
